@@ -1,5 +1,5 @@
 name: MeshCore Proxy
-version: "0.2.0"
+version: "0.3.0"
 slug: meshcore_proxy
 description: Run meshcore-proxy inside Home Assistant OS
 url: "https://github.com/mival/hass-meshcore-proxy"
@@ -19,7 +19,7 @@ options:
   usb_device: "/dev/ttyUSB0"
   usb_baud: 115200
   ble_address: ""
-  ble_pin: "123456"
+  ble_pin: ""
   tcp_host: "0.0.0.0"
   tcp_port: 5000
   log_events: false
