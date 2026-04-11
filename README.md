@@ -14,15 +14,43 @@ This repository contains a Home Assistant add-on that runs `meshcore-proxy`.
 
 ## Configure
 
-The add-on exposes one option:
+The add-on now supports structured transport and network setup from the UI.
 
-- `meshcore_proxy_args`: optional string appended to the startup command.
+Available options:
 
-Examples:
+- `connection_type`: `usb` or `ble`
+- `usb_device`: serial device path for USB mode (example: `/dev/ttyUSB0`)
+- `usb_baud`: serial baud rate (default: `115200`)
+- `ble_address`: BLE MAC/UUID/name for BLE mode
+- `ble_pin`: optional BLE pairing PIN (default: `123456`)
+- `tcp_host`: TCP bind host for proxy server (default: `0.0.0.0`)
+- `tcp_port`: TCP bind port for proxy server (default: `5000`)
+- `log_events`, `log_events_verbose`, `json_logs`, `quiet`, `debug`: logging flags
+- `meshcore_proxy_args`: optional extra raw arguments appended to startup command
+
+Example (USB):
 
 ```yaml
-meshcore_proxy_args: "--help"
+connection_type: usb
+usb_device: /dev/ttyUSB0
+usb_baud: 115200
+tcp_host: 0.0.0.0
+tcp_port: 5000
+log_events: true
+meshcore_proxy_args: ""
 ```
+
+Example (BLE):
+
+```yaml
+connection_type: ble
+ble_address: "12:34:56:78:90:AB"
+ble_pin: "123456"
+tcp_host: 0.0.0.0
+tcp_port: 5000
+```
+
+Note: Home Assistant add-ons expose TCP server settings through `tcp_host` and `tcp_port`. There is no separate radio "tcp connection" mode in meshcore-proxy; radio transport is USB serial or BLE.
 
 ## Local Development Notes
 
