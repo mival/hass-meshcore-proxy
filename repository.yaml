@@ -1,3 +1,3 @@
-name: MeshCore Add-ons
-url: "https://github.com/your-user/hass-meshcore-proxy"
-maintainer: "Your Name <you@example.com>"
+name: MeshCore Proxy Add-ons
+url: "https://github.com/mival/hass-meshcore-proxy"
+maintainer: "mival <jan.vonavka@gmail.com>"
