@@ -28,6 +28,26 @@ def valid_mac(addr: str) -> bool:
     return bool(MAC_RE.match(str(addr)))
 
 
+def log_info(msg: str) -> None:
+    """Log an info message via bashio."""
+    try:
+        # Escape single quotes in message for shell safety
+        safe_msg = msg.replace("'", "'\\''")
+        subprocess.run(["bash", "-c", f"bashio::log.info '{safe_msg}'"], timeout=2, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
+    except Exception:
+        pass  # Fallback: fail silently in case bashio is unavailable
+
+
+def log_error(msg: str) -> None:
+    """Log an error message via bashio."""
+    try:
+        # Escape single quotes in message for shell safety
+        safe_msg = msg.replace("'", "'\\''")
+        subprocess.run(["bash", "-c", f"bashio::log.error '{safe_msg}'"], timeout=2, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
+    except Exception:
+        pass  # Fallback: fail silently in case bashio is unavailable
+
+
 def run_bt(*args: str, timeout: int = 10):
     """Run a non-interactive bluetoothctl command and return (stdout, returncode)."""
     try:
@@ -282,10 +302,10 @@ class BLESetupHandler(http.server.BaseHTTPRequestHandler):
     # ------------------------------------------------------------------
     def do_GET(self):
         path = urllib.parse.urlparse(self.path).path
-        print(f"[GET] {path}", flush=True)
+        log_info(f"[GET] {path}")
 
         if path in ("/", "/index.html"):
-            print(f"[GET] Serving HTML UI", flush=True)
+            log_info(f"[GET] Serving HTML UI")
             body = HTML.encode()
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -294,7 +314,7 @@ class BLESetupHandler(http.server.BaseHTTPRequestHandler):
             self.wfile.write(body)
 
         elif path == "/api/adapter":
-            print(f"[API] Querying adapter status", flush=True)
+            log_info(f"[API] Querying adapter status")
             out, _ = run_bt("show")
             powered = "Powered: yes" in out
             name = "hci0"
@@ -302,94 +322,94 @@ class BLESetupHandler(http.server.BaseHTTPRequestHandler):
                 if "Name:" in line:
                     name = line.split("Name:", 1)[1].strip()
                     break
-            print(f"[API] Adapter {name}: powered={powered}", flush=True)
+            log_info(f"[API] Adapter {name}: powered={powered}")
             self.send_json({"powered": powered, "name": name})
 
         elif path == "/api/devices":
-            print(f"[API] Querying available devices", flush=True)
+            log_info(f"[API] Querying available devices")
             out, _ = run_bt("devices")
             devices = parse_devices(out)
-            print(f"[API] Found {len(devices)} available device(s)", flush=True)
+            log_info(f"[API] Found {len(devices)} available device(s)")
             self.send_json({"devices": devices})
 
         elif path == "/api/paired":
-            print(f"[API] Querying paired devices", flush=True)
+            log_info(f"[API] Querying paired devices")
             out, _ = run_bt("devices", "Paired")
             devices = parse_devices(out)
-            print(f"[API] Found {len(devices)} paired device(s)", flush=True)
+            log_info(f"[API] Found {len(devices)} paired device(s)")
             self.send_json({"devices": devices})
 
         else:
-            print(f"[GET] Not found: {path}", flush=True)
+            log_error(f"[GET] Not found: {path}")
             self.send_json({"error": "Not found"}, 404)
 
     # ------------------------------------------------------------------
     def do_POST(self):
         path = urllib.parse.urlparse(self.path).path
         body = self.read_json()
-        print(f"[POST] {path}", flush=True)
+        log_info(f"[POST] {path}")
 
         if path == "/api/power":
             state = "on" if body.get("state") == "on" else "off"
-            print(f"[API] Powering {state}…", flush=True)
+            log_info(f"[API] Powering {state}…")
             out, rc = run_bt("power", state)
             result = {"ok": rc == 0, "message": out or f"Power {state}"}
-            print(f"[API] Power {state}: rc={rc}, ok={result['ok']}", flush=True)
+            log_info(f"[API] Power {state}: rc={rc}, ok={result['ok']}")
             self.send_json(result)
 
         elif path == "/api/scan":
-            print(f"[API] Starting device scan…", flush=True)
+            log_info(f"[API] Starting device scan…")
             if _scanning:
-                print(f"[API] Scan already running", flush=True)
+                log_error(f"[API] Scan already running")
                 self.send_json({"ok": False, "message": "Scan already running"})
                 return
             ok = do_scan(10)
             msg = "Scan complete" if ok else "Scan failed"
-            print(f"[API] Scan finished: ok={ok}", flush=True)
+            log_info(f"[API] Scan finished: ok={ok}")
             self.send_json({"ok": ok, "message": msg})
 
         elif path == "/api/pair":
             addr = body.get("address", "")
-            print(f"[API] Pair request for {addr}", flush=True)
+            log_info(f"[API] Pair request for {addr}")
             if not valid_mac(addr):
-                print(f"[API] Invalid MAC address: {addr}", flush=True)
+                log_error(f"[API] Invalid MAC address: {addr}")
                 self.send_json({"ok": False, "message": "Invalid MAC address"}, 400)
                 return
-            print(f"[API] Ensuring power is on…", flush=True)
+            log_info(f"[API] Ensuring power is on…")
             run_bt("power", "on")
-            print(f"[API] Attempting to pair {addr}…", flush=True)
+            log_info(f"[API] Attempting to pair {addr}…")
             _, rc = run_bt("pair", addr, timeout=30)
             if rc == 0:
-                print(f"[API] Pair successful for {addr}", flush=True)
-                print(f"[API] Trusting {addr}…", flush=True)
+                log_info(f"[API] Pair successful for {addr}")
+                log_info(f"[API] Trusting {addr}…")
                 run_bt("trust", addr)
-                print(f"[API] Connecting to {addr}…", flush=True)
+                log_info(f"[API] Connecting to {addr}…")
                 run_bt("connect", addr, timeout=15)
                 msg = f"Paired and trusted {addr}"
             else:
-                print(f"[API] Pair failed/skipped for {addr} (rc={rc})", flush=True)
+                log_error(f"[API] Pair failed/skipped for {addr} (rc={rc})")
                 msg = f"Pairing finished for {addr} (may already be paired — check paired devices)"
             self.send_json({"ok": rc == 0, "message": msg})
 
         elif path == "/api/remove":
             addr = body.get("address", "")
-            print(f"[API] Remove request for {addr}", flush=True)
+            log_info(f"[API] Remove request for {addr}")
             if not valid_mac(addr):
-                print(f"[API] Invalid MAC address: {addr}", flush=True)
+                log_error(f"[API] Invalid MAC address: {addr}")
                 self.send_json({"ok": False, "message": "Invalid MAC address"}, 400)
                 return
-            print(f"[API] Removing {addr}…", flush=True)
+            log_info(f"[API] Removing {addr}…")
             out, rc = run_bt("remove", addr)
             result = {"ok": rc == 0, "message": out or f"Removed {addr}"}
-            print(f"[API] Remove {addr}: rc={rc}, ok={result['ok']}", flush=True)
+            log_info(f"[API] Remove {addr}: rc={rc}, ok={result['ok']}")
             self.send_json(result)
 
         else:
-            print(f"[POST] Not found: {path}", flush=True)
+            log_error(f"[POST] Not found: {path}")
             self.send_json({"error": "Not found"}, 404)
 
 
 if __name__ == "__main__":
     with http.server.ThreadingHTTPServer(("0.0.0.0", PORT), BLESetupHandler) as srv:
-        print(f"BLE setup server listening on port {PORT}", flush=True)
+        log_info(f"BLE setup server listening on port {PORT}")
         srv.serve_forever()
