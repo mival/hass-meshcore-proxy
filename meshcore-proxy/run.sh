@@ -38,6 +38,18 @@ case "${CONNECTION_TYPE}" in
             bashio::log.fatal "connection_type is ble but ble_address is empty"
             exit 1
         fi
+
+        # BLE stacks may expect either /run/dbus or /var/run/dbus. Normalize both.
+        if [[ -S /run/dbus/system_bus_socket ]]; then
+            export DBUS_SYSTEM_BUS_ADDRESS="unix:path=/run/dbus/system_bus_socket"
+            mkdir -p /var/run/dbus
+            ln -sf /run/dbus/system_bus_socket /var/run/dbus/system_bus_socket
+        elif [[ -S /var/run/dbus/system_bus_socket ]]; then
+            export DBUS_SYSTEM_BUS_ADDRESS="unix:path=/var/run/dbus/system_bus_socket"
+        else
+            bashio::log.warning "D-Bus system socket not found; BLE pairing/connection may fail"
+        fi
+
         CMD+=(--ble "${BLE_ADDRESS}")
         if ! bashio::var.is_empty "${BLE_PIN}"; then
             CMD+=(--ble-pin "${BLE_PIN}")

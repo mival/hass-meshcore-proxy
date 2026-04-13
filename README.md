@@ -22,7 +22,7 @@ Available options:
 - `usb_device`: serial device path for USB mode (example: `/dev/ttyUSB0`)
 - `usb_baud`: serial baud rate (default: `115200`)
 - `ble_address`: BLE MAC/UUID/name for BLE mode
-- `ble_pin`: optional BLE pairing PIN (default: `123456`)
+- `ble_pin`: optional BLE pairing PIN (unset by default)
 - `tcp_host`: TCP bind host for proxy server (default: `0.0.0.0`)
 - `tcp_port`: TCP bind port for proxy server (default: `5000`)
 - `log_events`, `log_events_verbose`, `json_logs`, `quiet`, `debug`: logging flags
@@ -51,6 +51,12 @@ tcp_port: 5000
 ```
 
 Note: Home Assistant add-ons expose TCP server settings through `tcp_host` and `tcp_port`. There is no separate radio "tcp connection" mode in meshcore-proxy; radio transport is USB serial or BLE.
+
+BLE troubleshooting:
+
+- Ensure `connection_type: ble` and `ble_address` is correct for your device.
+- Rebuild/restart the add-on after changing BLE options.
+- Keep `host_dbus: true` and `bluetooth: true` in add-on config.
 
 ## Local Development Notes
 
