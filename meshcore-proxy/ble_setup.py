@@ -50,15 +50,20 @@ def log_error(msg: str) -> None:
 
 def run_bt(*args: str, timeout: int = 10):
     """Run a non-interactive bluetoothctl command and return (stdout, returncode)."""
+    cmd_str = " ".join(args)
+    log_info(f"[BLUETOOTHCTL] Running: bluetoothctl {cmd_str}")
     try:
         r = subprocess.run(
             ["bluetoothctl"] + list(args),
             capture_output=True, text=True, timeout=timeout,
         )
+        log_info(f"[BLUETOOTHCTL] Command completed: rc={r.returncode}, output={r.stdout.strip()[:100]}")
         return r.stdout.strip(), r.returncode
     except subprocess.TimeoutExpired:
+        log_error(f"[BLUETOOTHCTL] Command timed out after {timeout}s: bluetoothctl {cmd_str}")
         return "timeout", 1
     except Exception as exc:
+        log_error(f"[BLUETOOTHCTL] Command failed: {exc}")
         return str(exc), 1
 
 
