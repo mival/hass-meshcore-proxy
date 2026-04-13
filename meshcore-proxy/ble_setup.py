@@ -112,7 +112,7 @@ def do_scan(duration: int = 10) -> bool:
 def pair_with_prompts(addr: str, pin: str, timeout: int = 40) -> tuple[bool, str]:
     """Pair using interactive bluetoothctl and reply to PIN/passkey prompts."""
     proc = subprocess.Popen(
-        ["bluetoothctl"],
+        ["bluetoothctl", "--agent", "KeyboardOnly"],
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
@@ -127,15 +127,88 @@ def pair_with_prompts(addr: str, pin: str, timeout: int = 40) -> tuple[bool, str
         proc.stdin.flush()
         log_info(f"[API] bluetoothctl << {cmd}")
 
+    def read_output_until(deadline: float, *needles: str) -> str:
+        """Read bluetoothctl output until one of *needles* appears or deadline passes."""
+        normalized_needles = tuple(needle.lower() for needle in needles)
+        while time.time() < deadline:
+            if proc.stdout is None:
+                return ""
+            line = proc.stdout.readline()
+            if line == "":
+                if proc.poll() is not None:
+                    return ""
+                time.sleep(0.1)
+                continue
+
+            out = line.strip()
+            output_lines.append(out)
+            lower = out.lower()
+            log_info(f"[API] bluetoothctl normalized: {lower}")
+            if any(needle in lower for needle in normalized_needles):
+                return lower
+        return ""
+
+    def ensure_agent_ready(deadline: float) -> bool:
+        """Register a temporary agent and make it the default for pairing."""
+        send("agent KeyboardOnly")
+        agent_status = read_output_until(
+            min(deadline, time.time() + 5),
+            "agent registered",
+            "agent is already registered",
+            "failed to register agent object",
+        )
+        if "failed to register agent object" in agent_status:
+            return False
+
+        send("default-agent")
+        default_status = read_output_until(
+            min(deadline, time.time() + 5),
+            "default agent request successful",
+            "agent is already the default agent",
+            "no agent is registered",
+            "failed to set agent as default",
+        )
+
+        if "no agent is registered" in default_status:
+            send("agent KeyboardOnly")
+            retry_status = read_output_until(
+                min(deadline, time.time() + 5),
+                "agent registered",
+                "agent is already registered",
+                "failed to register agent object",
+            )
+            if "failed to register agent object" in retry_status:
+                return False
+
+            send("default-agent")
+            default_status = read_output_until(
+                min(deadline, time.time() + 5),
+                "default agent request successful",
+                "agent is already the default agent",
+                "no agent is registered",
+                "failed to set agent as default",
+            )
+
+        return "no agent is registered" not in default_status and (
+            "default agent request successful" in default_status
+            or "agent is already the default agent" in default_status
+        )
+
     output_lines = []
     paired = False
     try:
-        send("agent off")
-        send("agent KeyboardOnly")
-        send("default-agent")
-        send(f"pair {addr}")
-
         deadline = time.time() + timeout
+        if not ensure_agent_ready(deadline):
+            return False, "\n".join(output_lines)
+
+        send("pairable on")
+        read_output_until(
+            min(deadline, time.time() + 5),
+            "changing pairable on succeeded",
+            "pairable: yes",
+        )
+
+        send(f"pair {addr}")
         pin_sent = False
 
         while time.time() < deadline:
@@ -155,6 +228,10 @@ def pair_with_prompts(addr: str, pin: str, timeout: int = 40) -> tuple[bool, str
 
             if "pairing successful" in lower or "already paired" in lower:
                 paired = True
+                break
+
+            if "no agent is registered" in lower:
+                log_error("[API] bluetoothctl lost pairing agent registration")
                 break
 
             if "confirm passkey" in lower or "confirm yes/no" in lower:
