@@ -123,52 +123,56 @@ def pair_with_prompts(addr: str, pin: str, timeout: int = 40) -> tuple[bool, str
         log_info(f"[API] bluetoothctl << {cmd}")
 
     output_lines = []
-    send("agent KeyboardDisplay")
-    send("default-agent")
-    send(f"pair {addr}")
-
-    deadline = time.time() + timeout
     paired = False
-    pin_sent = False
+    try:
+        send("agent off")
+        send("agent KeyboardOnly")
+        send("default-agent")
+        send(f"pair {addr}")
 
-    while time.time() < deadline:
-        if proc.stdout is None:
-            break
-        line = proc.stdout.readline()
-        if line == "":
-            if proc.poll() is not None:
+        deadline = time.time() + timeout
+        pin_sent = False
+
+        while time.time() < deadline:
+            if proc.stdout is None:
                 break
-            time.sleep(0.1)
-            continue
+            line = proc.stdout.readline()
+            if line == "":
+                if proc.poll() is not None:
+                    break
+                time.sleep(0.1)
+                continue
 
-        out = line.strip()
-        output_lines.append(out)
-        lower = out.lower()
-        log_info(f"[API] bluetoothctl normalized: {lower}")
+            out = line.strip()
+            output_lines.append(out)
+            lower = out.lower()
+            log_info(f"[API] bluetoothctl normalized: {lower}")
 
-        if "pairing successful" in lower or "already paired" in lower:
-            paired = True
-            break
+            if "pairing successful" in lower or "already paired" in lower:
+                paired = True
+                break
 
-        if "confirm passkey" in lower or "confirm yes/no" in lower:
-            send("yes")
+            if "confirm passkey" in lower or "confirm yes/no" in lower:
+                send("yes")
 
-        if (
-            "enter pin" in lower
-            or "pin code" in lower
-            or "passkey" in lower
-            or "request passkey" in lower
-            or "input pin" in lower
-        ) and pin and not pin_sent:
-            send(pin)
-            pin_sent = True
-
-    if proc.poll() is None:
-        send("quit")
-        try:
-            proc.wait(timeout=2)
-        except subprocess.TimeoutExpired:
-            proc.kill()
+            if (
+                "enter pin" in lower
+                or "pin code" in lower
+                or "passkey" in lower
+                or "request passkey" in lower
+                or "input pin" in lower
+            ) and pin and not pin_sent:
+                send(pin)
+                pin_sent = True
+    finally:
+        # Unregister temporary agent so future bluetoothctl calls use default state.
+        send("agent off")
+        if proc.poll() is None:
+            send("quit")
+            try:
+                proc.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                proc.kill()
 
     output = "\n".join(output_lines)
     return paired, output
