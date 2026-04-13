@@ -144,6 +144,7 @@ def pair_with_prompts(addr: str, pin: str, timeout: int = 40) -> tuple[bool, str
         out = line.strip()
         output_lines.append(out)
         lower = out.lower()
+        log_info(f"[API] bluetoothctl normalized: {lower}")
 
         if "pairing successful" in lower or "already paired" in lower:
             paired = True
