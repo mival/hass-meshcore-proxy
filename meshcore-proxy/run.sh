@@ -95,14 +95,5 @@ if ! bashio::var.is_empty "${EXTRA_ARGS}"; then
     CMD+=("$@")
 fi
 
-"${CMD[@]}" &
-PROXY_PID=$!
-
-shutdown() {
-    bashio::log.info "Stopping meshcore-proxy"
-    kill -TERM "${PROXY_PID}" 2>/dev/null || true
-}
-
-trap shutdown TERM INT
-
-wait "${PROXY_PID}"
+bashio::log.info "Executing: ${CMD[*]}"
+exec "${CMD[@]}"
