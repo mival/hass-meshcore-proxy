@@ -75,6 +75,11 @@ def parse_devices(out: str) -> list:
     return devices
 
 
+def normalize_bluetoothctl_output(out: str) -> str:
+    """Collapse whitespace for easier message matching."""
+    return " ".join(out.split()).lower()
+
+
 def do_scan(duration: int = 10) -> bool:
     """Start an interactive bluetoothctl scan for *duration* seconds."""
     global _scanning
@@ -314,9 +319,22 @@ async function startScan(){
   await loadDevices();
 }
 
-function deviceRow(dev, action, label, cls=''){
+function actionButton(label, cls, handler, ...args){
+  const serializedArgs = args.map(arg => JSON.stringify(String(arg))).join(',');
+  return `<button class="${cls}" onclick='${handler}(${serializedArgs})'>${label}</button>`;
+}
+
+function scanDeviceRow(dev){
   return `<li><div><div class="dn">${esc(dev.name)}</div><div class="da">${esc(dev.address)}</div></div>`
-       + `<button class="${cls}" onclick="${action}('${esc(dev.address)}','${esc(dev.name)}')">${label}</button></li>`;
+       + `<div class="row">${actionButton('Pair', '', 'pairDevice', dev.address)}</div></li>`;
+}
+
+function pairedDeviceRow(dev){
+  return `<li><div><div class="dn">${esc(dev.name)}</div><div class="da">${esc(dev.address)}</div></div>`
+       + `<div class="row">`
+       + `${actionButton('Unbind', '', 'unbindDevice', dev.address)}`
+       + `${actionButton('Remove', 'danger', 'removeDevice', dev.address)}`
+       + `</div></li>`;
 }
 
 async function loadDevices(){
@@ -329,7 +347,7 @@ async function loadDevices(){
     return;
   }
   log('[SUCCESS] Found '+d.devices.length+' device(s)');
-  ul.innerHTML = d.devices.map(dev => deviceRow(dev,'pairDevice','Pair')).join('');
+    ul.innerHTML = d.devices.map(scanDeviceRow).join('');
 }
 
 async function loadPaired(){
@@ -342,24 +360,35 @@ async function loadPaired(){
     return;
   }
   log('[SUCCESS] Found '+d.devices.length+' paired device(s)');
-  ul.innerHTML = d.devices.map(dev => deviceRow(dev,'removeDevice','Remove','danger')).join('');
+    ul.innerHTML = d.devices.map(pairedDeviceRow).join('');
 }
 
-async function pairDevice(addr, name){
+async function pairDevice(addr){
   const pin = document.getElementById('pair-pin')?.value?.trim() || '';
-  if(pin){ log('[INFO] Pairing '+esc(name)+' ('+esc(addr)+') with PIN code...'); }
-  else { log('[INFO] Pairing '+esc(name)+' ('+esc(addr)+') without PIN code...'); }
+    if(pin){ log('[INFO] Pairing '+esc(addr)+' with PIN code...'); }
+    else { log('[INFO] Pairing '+esc(addr)+' without PIN code...'); }
   const d = await api('api/pair',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({address:addr,pin:pin})});
   if(d?.ok===false) log('[ERROR] '+d?.message); else log('[SUCCESS] '+(d?.message||'Pairing complete'));
   await loadPaired(); await loadDevices();
 }
 
-async function removeDevice(addr, name){
-  if(!confirm('Remove '+name+' ('+addr+')?')) { log('[INFO] Remove cancelled'); return; }
-  log('[INFO] Removing device '+esc(addr)+' ('+esc(name)+')...');
+async function removeDevice(addr){
+    if(!confirm('Remove '+addr+'?')) { log('[INFO] Remove cancelled'); return; }
+    log('[INFO] Removing device '+esc(addr)+'...');
   const d = await api('api/remove',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({address:addr})});
   if(d?.ok===false) log('[ERROR] '+d?.message); else log('[SUCCESS] '+(d?.message||'Device removed'));
   await loadPaired();
+}
+
+async function unbindDevice(addr){
+    if(!confirm('Unbind '+addr+'? This disconnects and removes trust but does not forget the device.')) {
+        log('[INFO] Unbind cancelled');
+        return;
+    }
+    log('[INFO] Unbinding device '+esc(addr)+'...');
+    const d = await api('api/unbind',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({address:addr})});
+    if(d?.ok===false) log('[ERROR] '+d?.message); else log('[SUCCESS] '+(d?.message||'Device unbound'));
+    await loadPaired();
 }
 
 log('[INFO] Page loaded. Checking Bluetooth adapter...');
@@ -499,6 +528,37 @@ class BLESetupHandler(http.server.BaseHTTPRequestHandler):
             result = {"ok": rc == 0, "message": out or f"Removed {addr}"}
             log_info(f"[API] Remove {addr}: rc={rc}, ok={result['ok']}")
             self.send_json(result)
+
+        elif path == "/api/unbind":
+            addr = str(body.get("address", "")).strip()
+            log_info(f"[API] Unbind request for {addr}")
+            if not valid_mac(addr):
+                log_error(f"[API] Invalid MAC address: {addr}")
+                self.send_json({"ok": False, "message": "Invalid MAC address"}, 400)
+                return
+
+            disconnect_out, disconnect_rc = run_bt("disconnect", addr, timeout=15)
+            untrust_out, untrust_rc = run_bt("untrust", addr)
+
+            disconnect_status = normalize_bluetoothctl_output(disconnect_out)
+            disconnect_ok = disconnect_rc == 0 or "not connected" in disconnect_status
+            ok = disconnect_ok and untrust_rc == 0
+
+            if ok:
+                message = f"Unbound {addr}"
+            else:
+                details = "; ".join(
+                    part
+                    for part in (disconnect_out.strip(), untrust_out.strip())
+                    if part.strip()
+                )
+                message = details or f"Failed to unbind {addr}"
+
+            log_info(
+                f"[API] Unbind {addr}: disconnect_rc={disconnect_rc}, "
+                f"untrust_rc={untrust_rc}, ok={ok}"
+            )
+            self.send_json({"ok": ok, "message": message})
 
         else:
             log_error(f"[POST] Not found: {path}")

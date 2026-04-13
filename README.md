@@ -28,6 +28,7 @@ Available options:
 - `meshcore_proxy_args`: optional extra raw arguments appended to startup command
 
 PIN/passkey entry for BLE pairing is now done in the ingress page (`BT Pairing`) via the `Pairing Code` field.
+The same ingress page also exposes paired-device controls for `Unbind` (disconnect and remove trust) and `Remove` (forget the device completely).
 
 Example (USB):
 
@@ -55,6 +56,7 @@ Note: Home Assistant add-ons expose TCP server settings through `tcp_host` and `
 BLE troubleshooting:
 
 - Ensure `connection_type: ble` and `ble_address` is correct for your device.
+- Use the ingress page to scan, pair, unbind, or remove stale BLE pairings before retrying the add-on connection.
 - Rebuild/restart the add-on after changing BLE options.
 - Keep `host_dbus: true` and `bluetooth: true` in add-on config.
 
