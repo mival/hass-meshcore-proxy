@@ -22,11 +22,12 @@ Available options:
 - `usb_device`: serial device path for USB mode (example: `/dev/ttyUSB0`)
 - `usb_baud`: serial baud rate (default: `115200`)
 - `ble_address`: BLE MAC/UUID/name for BLE mode
-- `ble_pin`: optional BLE pairing PIN (unset by default)
 - `tcp_host`: TCP bind host for proxy server (default: `0.0.0.0`)
 - `tcp_port`: TCP bind port for proxy server (default: `5000`)
 - `log_events`, `log_events_verbose`, `json_logs`, `quiet`, `debug`: logging flags
 - `meshcore_proxy_args`: optional extra raw arguments appended to startup command
+
+PIN/passkey entry for BLE pairing is now done in the ingress page (`BT Pairing`) via the `Pairing Code` field.
 
 Example (USB):
 
@@ -45,7 +46,6 @@ Example (BLE):
 ```yaml
 connection_type: ble
 ble_address: "12:34:56:78:90:AB"
-ble_pin: "123456"
 tcp_host: 0.0.0.0
 tcp_port: 5000
 ```

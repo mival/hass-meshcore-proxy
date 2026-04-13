@@ -6,7 +6,6 @@ CONNECTION_TYPE="$(bashio::config 'connection_type')"
 USB_DEVICE="$(bashio::config 'usb_device')"
 USB_BAUD="$(bashio::config 'usb_baud')"
 BLE_ADDRESS="$(bashio::config 'ble_address')"
-BLE_PIN="$(bashio::config 'ble_pin')"
 TCP_HOST="$(bashio::config 'tcp_host')"
 TCP_PORT="$(bashio::config 'tcp_port')"
 
@@ -56,9 +55,6 @@ case "${CONNECTION_TYPE}" in
         fi
 
         CMD+=(--ble "${BLE_ADDRESS}")
-        if ! bashio::var.is_empty "${BLE_PIN}"; then
-            CMD+=(--ble-pin "${BLE_PIN}")
-        fi
         ;;
     *)
         bashio::log.fatal "Unsupported connection_type: ${CONNECTION_TYPE}. Use usb or ble"
