@@ -373,19 +373,41 @@ class BLESetupHandler(http.server.BaseHTTPRequestHandler):
                 return
             log_info(f"[API] Ensuring power is on…")
             run_bt("power", "on")
-            log_info(f"[API] Attempting to pair {addr}…")
-            _, rc = run_bt("pair", addr, timeout=30)
-            if rc == 0:
-                log_info(f"[API] Pair successful for {addr}")
-                log_info(f"[API] Trusting {addr}…")
-                run_bt("trust", addr)
-                log_info(f"[API] Connecting to {addr}…")
-                run_bt("connect", addr, timeout=15)
-                msg = f"Paired and trusted {addr}"
-            else:
-                log_error(f"[API] Pair failed/skipped for {addr} (rc={rc})")
-                msg = f"Pairing finished for {addr} (may already be paired — check paired devices)"
-            self.send_json({"ok": rc == 0, "message": msg})
+            log_info(f"[API] Attempting to pair {addr} (no-input agent)…")
+            try:
+                proc = subprocess.Popen(
+                    ["bluetoothctl"],
+                    stdin=subprocess.PIPE,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                )
+                commands = (
+                    "agent NoInputNoOutput\n"
+                    "default-agent\n"
+                    f"pair {addr}\n"
+                    f"trust {addr}\n"
+                    f"connect {addr}\n"
+                    "quit\n"
+                )
+                try:
+                    out, _ = proc.communicate(input=commands, timeout=40)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                    out = "timeout"
+                rc = proc.returncode if proc.returncode is not None else 0
+                log_info(f"[API] Pair session output: {out.strip()[:200]}")
+                paired = "Pairing successful" in out or "already paired" in out.lower()
+                if paired:
+                    msg = f"Paired and trusted {addr}"
+                    log_info(f"[API] Pair successful for {addr}")
+                else:
+                    msg = f"Pairing finished for {addr} (may already be paired — check paired devices)"
+                    log_error(f"[API] Pair may have failed for {addr}")
+                self.send_json({"ok": paired, "message": msg})
+            except Exception as exc:
+                log_error(f"[API] Pair exception: {exc}")
+                self.send_json({"ok": False, "message": str(exc)})
 
         elif path == "/api/remove":
             addr = body.get("address", "")
