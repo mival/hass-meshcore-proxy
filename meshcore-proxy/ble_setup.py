@@ -171,30 +171,41 @@ async function api(path, opts={}){
 }
 
 async function checkBt(){
+  log('[INFO] Checking Bluetooth adapter status…');
   const d = await api('api/adapter');
-  if(!d) return;
+  if(!d) { log('[ERROR] Failed to get adapter status'); return; }
   const b = document.getElementById('bt-badge');
-  if(d.powered){ b.textContent='Powered ON'; b.className='badge on'; }
-  else { b.textContent='Powered OFF'; b.className='badge off'; }
+  if(d.powered){
+    b.textContent='Powered ON';
+    b.className='badge on';
+    log('[INFO] Adapter '+esc(d.name)+' is powered ON');
+  } else {
+    b.textContent='Powered OFF';
+    b.className='badge off';
+    log('[INFO] Adapter '+esc(d.name)+' is powered OFF');
+  }
 }
 
 async function powerOn(){
-  log('Powering on…');
+  log('[INFO] Sending power on command…');
   const d = await api('api/power',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({state:'on'})});
-  log(d?.message||'Done'); await checkBt();
+  if(d?.ok===false) log('[ERROR] '+d?.message); else log('[SUCCESS] '+d?.message||'Power on complete');
+  await checkBt();
 }
 async function powerOff(){
-  log('Powering off…');
+  log('[INFO] Sending power off command…');
   const d = await api('api/power',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({state:'off'})});
-  log(d?.message||'Done'); await checkBt();
+  if(d?.ok===false) log('[ERROR] '+d?.message); else log('[SUCCESS] '+d?.message||'Power off complete');
+  await checkBt();
 }
 
 async function startScan(){
   const btn = document.getElementById('scan-btn');
   btn.disabled = true; btn.textContent = 'Scanning…';
-  log('Scanning 10 s…');
+  log('[INFO] Starting BLE device scan (10 seconds)…');
   const d = await api('api/scan',{method:'POST'});
-  log(d?.message||'Scan done'); btn.disabled=false; btn.textContent='Scan (10 s)';
+  if(d?.ok===false) log('[ERROR] '+d?.message); else log('[SUCCESS] '+d?.message||'Scan done');
+  btn.disabled=false; btn.textContent='Scan (10 s)';
   await loadDevices();
 }
 
@@ -204,33 +215,47 @@ function deviceRow(dev, action, label, cls=''){
 }
 
 async function loadDevices(){
+  log('[INFO] Loading available devices…');
   const d = await api('api/devices');
   const ul = document.getElementById('scan-list');
-  if(!d||!d.devices.length){ ul.innerHTML='<li class="empty">No devices found.</li>'; return; }
+  if(!d||!d.devices.length){
+    log('[INFO] No devices found');
+    ul.innerHTML='<li class="empty">No devices found.</li>';
+    return;
+  }
+  log('[SUCCESS] Found '+d.devices.length+' device(s)');
   ul.innerHTML = d.devices.map(dev => deviceRow(dev,'pairDevice','Pair')).join('');
 }
 
 async function loadPaired(){
+  log('[INFO] Loading paired devices…');
   const d = await api('api/paired');
   const ul = document.getElementById('paired-list');
-  if(!d||!d.devices.length){ ul.innerHTML='<li class="empty">No paired devices.</li>'; return; }
+  if(!d||!d.devices.length){
+    log('[INFO] No paired devices');
+    ul.innerHTML='<li class="empty">No paired devices.</li>';
+    return;
+  }
+  log('[SUCCESS] Found '+d.devices.length+' paired device(s)');
   ul.innerHTML = d.devices.map(dev => deviceRow(dev,'removeDevice','Remove','danger')).join('');
 }
 
 async function pairDevice(addr, name){
-  log('Pairing '+name+' ('+addr+')…');
+  log('[INFO] Pairing '+esc(name)+' ('+esc(addr)+')…');
   const d = await api('api/pair',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({address:addr})});
-  log(d?.message||'Done');
+  if(d?.ok===false) log('[ERROR] '+d?.message); else log('[SUCCESS] '+d?.message||'Pairing complete');
   await loadPaired(); await loadDevices();
 }
 
 async function removeDevice(addr, name){
-  if(!confirm('Remove '+name+' ('+addr+')?')) return;
-  log('Removing '+addr+'…');
+  if(!confirm('Remove '+name+' ('+addr+')?')) { log('[INFO] Remove cancelled'); return; }
+  log('[INFO] Removing device '+esc(addr)+' ('+esc(name)+')…');
   const d = await api('api/remove',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({address:addr})});
-  log(d?.message||'Done'); await loadPaired();
+  if(d?.ok===false) log('[ERROR] '+d?.message); else log('[SUCCESS] '+d?.message||'Device removed');
+  await loadPaired();
 }
 
+log('[INFO] Page loaded. Checking Bluetooth adapter…');
 checkBt(); loadDevices(); loadPaired();
 </script>
 </body>
@@ -257,8 +282,10 @@ class BLESetupHandler(http.server.BaseHTTPRequestHandler):
     # ------------------------------------------------------------------
     def do_GET(self):
         path = urllib.parse.urlparse(self.path).path
+        print(f"[GET] {path}", flush=True)
 
         if path in ("/", "/index.html"):
+            print(f"[GET] Serving HTML UI", flush=True)
             body = HTML.encode()
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -267,6 +294,7 @@ class BLESetupHandler(http.server.BaseHTTPRequestHandler):
             self.wfile.write(body)
 
         elif path == "/api/adapter":
+            print(f"[API] Querying adapter status", flush=True)
             out, _ = run_bt("show")
             powered = "Powered: yes" in out
             name = "hci0"
@@ -274,60 +302,90 @@ class BLESetupHandler(http.server.BaseHTTPRequestHandler):
                 if "Name:" in line:
                     name = line.split("Name:", 1)[1].strip()
                     break
+            print(f"[API] Adapter {name}: powered={powered}", flush=True)
             self.send_json({"powered": powered, "name": name})
 
         elif path == "/api/devices":
+            print(f"[API] Querying available devices", flush=True)
             out, _ = run_bt("devices")
-            self.send_json({"devices": parse_devices(out)})
+            devices = parse_devices(out)
+            print(f"[API] Found {len(devices)} available device(s)", flush=True)
+            self.send_json({"devices": devices})
 
         elif path == "/api/paired":
+            print(f"[API] Querying paired devices", flush=True)
             out, _ = run_bt("devices", "Paired")
-            self.send_json({"devices": parse_devices(out)})
+            devices = parse_devices(out)
+            print(f"[API] Found {len(devices)} paired device(s)", flush=True)
+            self.send_json({"devices": devices})
 
         else:
+            print(f"[GET] Not found: {path}", flush=True)
             self.send_json({"error": "Not found"}, 404)
 
     # ------------------------------------------------------------------
     def do_POST(self):
         path = urllib.parse.urlparse(self.path).path
         body = self.read_json()
+        print(f"[POST] {path}", flush=True)
 
         if path == "/api/power":
             state = "on" if body.get("state") == "on" else "off"
+            print(f"[API] Powering {state}…", flush=True)
             out, rc = run_bt("power", state)
-            self.send_json({"ok": rc == 0, "message": out or f"Power {state}"})
+            result = {"ok": rc == 0, "message": out or f"Power {state}"}
+            print(f"[API] Power {state}: rc={rc}, ok={result['ok']}", flush=True)
+            self.send_json(result)
 
         elif path == "/api/scan":
+            print(f"[API] Starting device scan…", flush=True)
             if _scanning:
+                print(f"[API] Scan already running", flush=True)
                 self.send_json({"ok": False, "message": "Scan already running"})
                 return
             ok = do_scan(10)
-            self.send_json({"ok": ok, "message": "Scan complete" if ok else "Scan failed"})
+            msg = "Scan complete" if ok else "Scan failed"
+            print(f"[API] Scan finished: ok={ok}", flush=True)
+            self.send_json({"ok": ok, "message": msg})
 
         elif path == "/api/pair":
             addr = body.get("address", "")
+            print(f"[API] Pair request for {addr}", flush=True)
             if not valid_mac(addr):
+                print(f"[API] Invalid MAC address: {addr}", flush=True)
                 self.send_json({"ok": False, "message": "Invalid MAC address"}, 400)
                 return
+            print(f"[API] Ensuring power is on…", flush=True)
             run_bt("power", "on")
+            print(f"[API] Attempting to pair {addr}…", flush=True)
             _, rc = run_bt("pair", addr, timeout=30)
-            run_bt("trust", addr)
-            run_bt("connect", addr, timeout=15)
             if rc == 0:
+                print(f"[API] Pair successful for {addr}", flush=True)
+                print(f"[API] Trusting {addr}…", flush=True)
+                run_bt("trust", addr)
+                print(f"[API] Connecting to {addr}…", flush=True)
+                run_bt("connect", addr, timeout=15)
                 msg = f"Paired and trusted {addr}"
             else:
+                print(f"[API] Pair failed/skipped for {addr} (rc={rc})", flush=True)
                 msg = f"Pairing finished for {addr} (may already be paired — check paired devices)"
             self.send_json({"ok": rc == 0, "message": msg})
 
         elif path == "/api/remove":
             addr = body.get("address", "")
+            print(f"[API] Remove request for {addr}", flush=True)
             if not valid_mac(addr):
+                print(f"[API] Invalid MAC address: {addr}", flush=True)
                 self.send_json({"ok": False, "message": "Invalid MAC address"}, 400)
                 return
+            print(f"[API] Removing {addr}…", flush=True)
             out, rc = run_bt("remove", addr)
-            self.send_json({"ok": rc == 0, "message": out or f"Removed {addr}"})
+            result = {"ok": rc == 0, "message": out or f"Removed {addr}"}
+            print(f"[API] Remove {addr}: rc={rc}, ok={result['ok']}", flush=True)
+            self.send_json(result)
 
         else:
+            print(f"[POST] Not found: {path}", flush=True)
             self.send_json({"error": "Not found"}, 404)
 
 
