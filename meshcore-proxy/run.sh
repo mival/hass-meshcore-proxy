@@ -43,7 +43,9 @@ case "${CONNECTION_TYPE}" in
         if [[ -S /run/dbus/system_bus_socket ]]; then
             export DBUS_SYSTEM_BUS_ADDRESS="unix:path=/run/dbus/system_bus_socket"
             mkdir -p /var/run/dbus
-            ln -sf /run/dbus/system_bus_socket /var/run/dbus/system_bus_socket
+            if [[ ! -e /var/run/dbus/system_bus_socket ]]; then
+                ln -s /run/dbus/system_bus_socket /var/run/dbus/system_bus_socket
+            fi
         elif [[ -S /var/run/dbus/system_bus_socket ]]; then
             export DBUS_SYSTEM_BUS_ADDRESS="unix:path=/var/run/dbus/system_bus_socket"
         else
