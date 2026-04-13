@@ -11,6 +11,7 @@ import json
 import os
 import re
 import subprocess
+import sys
 import threading
 import time
 import urllib.parse
@@ -29,23 +30,13 @@ def valid_mac(addr: str) -> bool:
 
 
 def log_info(msg: str) -> None:
-    """Log an info message via bashio."""
-    try:
-        # Escape single quotes in message for shell safety
-        safe_msg = msg.replace("'", "'\\''")
-        subprocess.run(["bash", "-c", f"bashio::log.info '{safe_msg}'"], timeout=2, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
-    except Exception:
-        pass  # Fallback: fail silently in case bashio is unavailable
+    """Log an info message to stdout (captured by HA supervisor)."""
+    print(f"[INFO] {msg}", flush=True)
 
 
 def log_error(msg: str) -> None:
-    """Log an error message via bashio."""
-    try:
-        # Escape single quotes in message for shell safety
-        safe_msg = msg.replace("'", "'\\''")
-        subprocess.run(["bash", "-c", f"bashio::log.error '{safe_msg}'"], timeout=2, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
-    except Exception:
-        pass  # Fallback: fail silently in case bashio is unavailable
+    """Log an error message to stderr (captured by HA supervisor)."""
+    print(f"[ERROR] {msg}", file=sys.stderr, flush=True)
 
 
 def run_bt(*args: str, timeout: int = 10):
