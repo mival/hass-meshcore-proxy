@@ -1,5 +1,5 @@
 name: MeshCore Proxy
-version: "0.4.4"
+version: "0.4.5"
 slug: meshcore_proxy
 description: Run meshcore-proxy inside Home Assistant OS
 url: "https://github.com/mival/hass-meshcore-proxy"
