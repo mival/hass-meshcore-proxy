@@ -154,16 +154,24 @@ const $log = document.getElementById('log');
 function log(m){ $log.textContent += m + '\n'; $log.scrollTop = $log.scrollHeight; }
 function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
+// Determine base path for ingress compatibility.
+// When served via HA ingress the page URL is .../api/hassio_ingress/{token}/
+// so relative paths (no leading slash) resolve correctly.
+const BASE = (function(){
+  const p = window.location.pathname;
+  return p.endsWith('/') ? p : p + '/';
+})();
+
 async function api(path, opts={}){
   try{
-    const r = await fetch(path, opts);
+    const r = await fetch(BASE + path, opts);
     if(!r.ok) log('HTTP '+r.status+' from '+path);
     return await r.json();
   }catch(e){ log('Error: '+e); return null; }
 }
 
 async function checkBt(){
-  const d = await api('/api/adapter');
+  const d = await api('api/adapter');
   if(!d) return;
   const b = document.getElementById('bt-badge');
   if(d.powered){ b.textContent='Powered ON'; b.className='badge on'; }
@@ -172,12 +180,12 @@ async function checkBt(){
 
 async function powerOn(){
   log('Powering on…');
-  const d = await api('/api/power',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({state:'on'})});
+  const d = await api('api/power',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({state:'on'})});
   log(d?.message||'Done'); await checkBt();
 }
 async function powerOff(){
   log('Powering off…');
-  const d = await api('/api/power',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({state:'off'})});
+  const d = await api('api/power',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({state:'off'})});
   log(d?.message||'Done'); await checkBt();
 }
 
@@ -185,7 +193,7 @@ async function startScan(){
   const btn = document.getElementById('scan-btn');
   btn.disabled = true; btn.textContent = 'Scanning…';
   log('Scanning 10 s…');
-  const d = await api('/api/scan',{method:'POST'});
+  const d = await api('api/scan',{method:'POST'});
   log(d?.message||'Scan done'); btn.disabled=false; btn.textContent='Scan (10 s)';
   await loadDevices();
 }
@@ -196,14 +204,14 @@ function deviceRow(dev, action, label, cls=''){
 }
 
 async function loadDevices(){
-  const d = await api('/api/devices');
+  const d = await api('api/devices');
   const ul = document.getElementById('scan-list');
   if(!d||!d.devices.length){ ul.innerHTML='<li class="empty">No devices found.</li>'; return; }
   ul.innerHTML = d.devices.map(dev => deviceRow(dev,'pairDevice','Pair')).join('');
 }
 
 async function loadPaired(){
-  const d = await api('/api/paired');
+  const d = await api('api/paired');
   const ul = document.getElementById('paired-list');
   if(!d||!d.devices.length){ ul.innerHTML='<li class="empty">No paired devices.</li>'; return; }
   ul.innerHTML = d.devices.map(dev => deviceRow(dev,'removeDevice','Remove','danger')).join('');
@@ -211,7 +219,7 @@ async function loadPaired(){
 
 async function pairDevice(addr, name){
   log('Pairing '+name+' ('+addr+')…');
-  const d = await api('/api/pair',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({address:addr})});
+  const d = await api('api/pair',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({address:addr})});
   log(d?.message||'Done');
   await loadPaired(); await loadDevices();
 }
@@ -219,7 +227,7 @@ async function pairDevice(addr, name){
 async function removeDevice(addr, name){
   if(!confirm('Remove '+name+' ('+addr+')?')) return;
   log('Removing '+addr+'…');
-  const d = await api('/api/remove',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({address:addr})});
+  const d = await api('api/remove',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({address:addr})});
   log(d?.message||'Done'); await loadPaired();
 }
 
