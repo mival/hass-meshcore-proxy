@@ -9,6 +9,7 @@ RUN apk add --no-cache python3 py3-pip bluez \
 ENV PATH="/opt/meshcore-proxy/bin:${PATH}"
 
 COPY run.sh /run.sh
+COPY ble_setup.py /ble_setup.py
 RUN chmod a+x /run.sh
 
 CMD [ "/run.sh" ]

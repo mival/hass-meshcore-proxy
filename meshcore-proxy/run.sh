@@ -18,6 +18,9 @@ DEBUG="$(bashio::config 'debug')"
 
 EXTRA_ARGS="$(bashio::config 'meshcore_proxy_args')"
 
+bashio::log.info "Starting BLE pairing setup server on port 7654"
+python3 /ble_setup.py &
+
 bashio::log.info "Starting meshcore-proxy"
 
 CMD=(meshcore-proxy)

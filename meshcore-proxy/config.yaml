@@ -1,5 +1,5 @@
 name: MeshCore Proxy
-version: "0.4.1"
+version: "0.4.2"
 slug: meshcore_proxy
 description: Run meshcore-proxy inside Home Assistant OS
 url: "https://github.com/mival/hass-meshcore-proxy"
@@ -15,6 +15,10 @@ host_network: true
 bluetooth: true
 host_dbus: true
 uart: true
+ingress: true
+ingress_port: 7654
+panel_icon: mdi:bluetooth-settings
+panel_title: BT Pairing
 options:
   connection_type: "usb"
   usb_device: "/dev/ttyUSB0"
@@ -30,7 +34,7 @@ options:
   debug: false
   meshcore_proxy_args: ""
 schema:
-  connection_type: str
+  connection_type: list(usb|ble)
   usb_device: str?
   usb_baud: int?
   ble_address: str?
